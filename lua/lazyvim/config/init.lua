@@ -114,6 +114,42 @@ function M.setup(opts)
     M.load("keymaps")
   end
 
+  ---@param range? string
+  function M.has(range)
+    local Semver = require("lazy.manage.semver")
+    return Semver.range(range or M.lazy_version):matches(require("lazy.core.config").version or "0.0.0")
+  end
+
+  ---@param name "autocmds" | "options" | "keymaps"
+  function M.load(name)
+    local Util = require("lazy.core.util")
+    local function _load(mod)
+      Util.try(function()
+        require(mod)
+      end, {
+        msg = "Failed loading " .. mod,
+        on_error = function(msg)
+          local info = require("lazy.core.cache").find(mod)
+          if info == nil or (type(info) == "table" and #info == 0) then
+            return
+          end
+          Util.error(msg)
+        end,
+      })
+    end
+    -- always load lazyvim, then user file
+    if M.defaults[name] or name == "options" then
+      _load("lazyvim.config." .. name)
+    end
+    _load("config." .. name)
+    if vim.bo.filetype == "lazy" then
+      -- HACK: LazyVim may have overwritten options of the Lazy ui, so reset this here
+      vim.cmd([[do VimResized]])
+    end
+    local pattern = "LazyVim" .. name:sub(1, 1):upper() .. name:sub(2)
+    vim.api.nvim_exec_autocmds("User", { pattern = pattern, modeline = false })
+  end
+
   require("lazy.core.util").try(function()
     if type(M.colorscheme) == "function" then
       M.colorscheme()
@@ -127,42 +163,6 @@ function M.setup(opts)
       vim.cmd.colorscheme("habamax")
     end,
   })
-end
-
----@param range? string
-function M.has(range)
-  local Semver = require("lazy.manage.semver")
-  return Semver.range(range or M.lazy_version):matches(require("lazy.core.config").version or "0.0.0")
-end
-
----@param name "autocmds" | "options" | "keymaps"
-function M.load(name)
-  local Util = require("lazy.core.util")
-  local function _load(mod)
-    Util.try(function()
-      require(mod)
-    end, {
-      msg = "Failed loading " .. mod,
-      on_error = function(msg)
-        local info = require("lazy.core.cache").find(mod)
-        if info == nil or (type(info) == "table" and #info == 0) then
-          return
-        end
-        Util.error(msg)
-      end,
-    })
-  end
-  -- always load lazyvim, then user file
-  if M.defaults[name] or name == "options" then
-    _load("lazyvim.config." .. name)
-  end
-  _load("config." .. name)
-  if vim.bo.filetype == "lazy" then
-    -- HACK: LazyVim may have overwritten options of the Lazy ui, so reset this here
-    vim.cmd([[do VimResized]])
-  end
-  local pattern = "LazyVim" .. name:sub(1, 1):upper() .. name:sub(2)
-  vim.api.nvim_exec_autocmds("User", { pattern = pattern, modeline = false })
 end
 
 M.did_init = false
